@@ -11,6 +11,7 @@ const DefaultContainer = () => import('@/containers/DefaultContainer');
 // Views
 const Dashboard = () => import('@/views/Dashboard');
 const ProjectList = () => import('@/views/portfolio/projects/ProjectList');
+const TagList = () => import('@/views/portfolio/tags/TagList.vue');
 const ComponentSearch = () =>
   import('@/views/portfolio/components/ComponentSearch');
 const VulnerabilityList = () =>
@@ -21,10 +22,14 @@ const LicenseList = () => import('@/views/portfolio/licenses/LicenseList');
 const PolicyManagement = () => import('@/views/policy/PolicyManagement');
 const Project = () => import('@/views/portfolio/projects/Project');
 
+const PolicyViolationAudit = () => import('@/views/audit/PolicyViolationAudit');
+
 const Administration = () => import('@/views/administration/Administration');
 const General = () => import('@/views/administration/configuration/General');
 const BomFormats = () =>
   import('@/views/administration/configuration/BomFormats');
+const WelcomeMessage = () =>
+  import('@/views/administration/configuration/WelcomeMessage');
 const Email = () => import('@/views/administration/configuration/Email');
 const Jira = () => import('@/views/administration/configuration/JiraConfig');
 const InternalComponents = () =>
@@ -265,6 +270,17 @@ function configRoutes() {
           },
         },
         {
+          path: 'tags',
+          name: 'Tags',
+          component: TagList,
+          meta: {
+            title: i18n.t('message.tags'),
+            i18n: 'message.tags',
+            sectionPath: '/tags',
+            permission: 'VIEW_PORTFOLIO',
+          },
+        },
+        {
           path: 'licenses',
           name: 'Licenses',
           component: LicenseList,
@@ -305,6 +321,16 @@ function configRoutes() {
           },
         },
         {
+          path: 'policyViolationAudit',
+          component: PolicyViolationAudit,
+          meta: {
+            title: i18n.t('message.policy_violation_audit'),
+            i18n: 'message.policy_violation_audit',
+            sectionPath: '/audit',
+            permission: 'VIEW_POLICY_VIOLATION',
+          },
+        },
+        {
           path: 'admin',
           component: Administration,
           meta: {
@@ -329,6 +355,16 @@ function configRoutes() {
             {
               path: 'configuration/bomFormats',
               component: BomFormats,
+              meta: {
+                title: i18n.t('message.administration'),
+                i18n: 'message.administration',
+                sectionPath: '/admin',
+                permission: 'SYSTEM_CONFIGURATION',
+              },
+            },
+            {
+              path: 'configuration/welcomeMessage',
+              component: WelcomeMessage,
               meta: {
                 title: i18n.t('message.administration'),
                 i18n: 'message.administration',
