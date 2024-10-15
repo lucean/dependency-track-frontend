@@ -62,9 +62,25 @@
                           />
                         </b-button>
                       </b-col>
+                      <b-col cols="6" v-show="jwtAvailable">
+                        <b-button
+                          :style="{ float: showLoginForm ? 'right' : 'none' }"
+                          v-on:click="jwtLogin()"
+                        >
+                          <span v-if="jwtCheckLoginButtonTextSet()">{{
+                            jwtLoginButtonText()
+                          }}</span>
+                          <img
+                            alt="JWT Logo"
+                            src="../../assets/img/jwt-logo.svg"
+                            width="60px"
+                            v-else
+                          />
+                        </b-button>
+                      </b-col>
                     </b-row>
                     <b-link
-                      v-show="oidcAvailable && !showLoginForm"
+                      v-show="(jwtAvailable | oidcAvailable) && !showLoginForm"
                       v-on:click="showLoginForm = true"
                       >{{ $t('message.login_more_options') }}</b-link
                     >
@@ -131,6 +147,7 @@ export default {
         scope: this.$oidc.SCOPE,
         loadUserInfo: false,
       }),
+      jwtAvailable: false,
       showLoginForm: false,
     };
   },
@@ -218,66 +235,141 @@ export default {
     oidcLoginButtonText() {
       return this.$oidc.LOGIN_BUTTON_TEXT;
     },
+    isJwtAvailableInFrontend() {
+      return (
+        this.$jwt.BASE_URL &&
+        this.$jwt.URL_JWT_AVAILABLE &&
+        this.$jwt.URL_USER_JWT_TOKEN
+      );
+    },
+    checkJwtServiceAvailability() {
+      if (!this.isJwtAvailableInFrontend()) {
+        return Promise.resolve(false);
+      }
+
+      // Send a request to the JWT service to check if it is available
+      const url = this.$jwt.BASE_URL + '/' + this.$jwt.URL_JWT_AVAILABLE;
+
+      return axios
+        .get(url)
+        .then((result) => {
+          let jwtAvailableInBackend = false;
+          if (result.status === 200) {
+            jwtAvailableInBackend = true;
+          }
+          return jwtAvailableInBackend;
+        })
+        .catch((err) => {
+          return Promise.reject(err);
+        });
+    },
+    jwtLogin() {
+      // send a request to the JWT service to get a token
+      const url = this.$jwt.BASE_URL + '/' + this.$jwt.URL_USER_JWT_TOKEN;
+
+      this.axios
+        .get(url)
+        .then((result) => {
+          console.log('result', result);
+          if (result.status === 200) {
+            EventBus.$emit('authenticated', result.data);
+            // redirect to url from query param but only if it is save for redirection
+            const redirectTo = getRedirectUrl(this.$router);
+            redirectTo
+              ? this.$router.replace(redirectTo)
+              : this.$router.replace({ name: 'Dashboard' });
+          }
+        })
+        .catch((err) => {
+          if (err.response.status === 401) {
+            this.$bvModal.show('modal-informational');
+            this.loginError = this.$t('message.login_unauthorized');
+          } else if (err.response.status === 403) {
+            this.$bvModal.show('modal-informational');
+            this.loginError = this.$t('message.login_forbidden');
+          }
+        });
+    },
+    jwtCheckLoginButtonTextSet() {
+      return this.$jwt.LOGIN_BUTTON_TEXT.length > 0;
+    },
+    jwtLoginButtonText() {
+      return this.$jwt.LOGIN_BUTTON_TEXT;
+    },
   },
   mounted() {
-    this.checkOidcAvailability()
-      .then((oidcAvailable) => {
-        this.oidcAvailable = oidcAvailable;
-        this.showLoginForm = !oidcAvailable;
+    this.checkJwtServiceAvailability()
+      .then((jwtAvailable) => {
+        // if the JWT service is available, set some flags that enable the login form
+        this.jwtAvailable = jwtAvailable;
+        this.showLoginForm = !jwtAvailable;
+      })
+      .catch(() => {
+        // automatic fallback to login form when JWT availability check failed
+        this.showLoginForm = true;
+      });
 
-        if (!oidcAvailable) {
-          return;
-        }
+    // Avoid having OIDC login available at the same time as JWT login
+    if (!this.jwtAvailable) {
+      this.checkOidcAvailability()
+        .then((oidcAvailable) => {
+          this.oidcAvailable = oidcAvailable;
+          this.showLoginForm = !oidcAvailable;
 
-        this.oidcUserManager.getUser().then((oidcUser) => {
-          // oidcUser will only be set when coming from oidc-callback.html
-          if (oidcUser === null) {
+          if (!oidcAvailable) {
             return;
           }
 
-          // Exchange OAuth2 Access Token for a JWT issued by Dependency-Track
-          const url = this.$api.BASE_URL + '/' + this.$api.URL_USER_OIDC_LOGIN;
-          const requestBody = {
-            accessToken: oidcUser.access_token,
-            idToken: oidcUser.id_token,
-          };
-          const config = {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-          };
+          this.oidcUserManager.getUser().then((oidcUser) => {
+            // oidcUser will only be set when coming from oidc-callback.html
+            if (oidcUser === null) {
+              return;
+            }
 
-          this.axios
-            .post(url, qs.stringify(requestBody), config)
-            .then((result) => {
-              if (result.status === 200) {
-                EventBus.$emit('authenticated', result.data);
-                // redirect to url from query param but only if it is save for redirection
-                const redirectTo = getRedirectUrl(this.$router);
-                redirectTo
-                  ? this.$router.replace(redirectTo)
-                  : this.$router.replace({ name: 'Dashboard' });
+            // Exchange OAuth2 Access Token for a JWT issued by Dependency-Track
+            const url = this.$api.BASE_URL + "/" + this.$api.URL_USER_OIDC_LOGIN;
+            const requestBody = {
+              accessToken: oidcUser.access_token,
+              idToken: oidcUser.id_token
+            };
+            const config = {
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
               }
-            })
-            .catch((err) => {
-              if (err.response.status === 401) {
-                this.$bvModal.show('modal-informational');
-                this.loginError = this.$t('message.login_unauthorized');
-              } else if (err.response.status === 403) {
-                this.$bvModal.show('modal-informational');
-                this.loginError = this.$t('message.login_forbidden');
-              }
-            })
-            .finally(() => {
-              this.oidcUserManager.removeUser();
-            });
+            };
+
+            this.axios
+              .post(url, qs.stringify(requestBody), config)
+              .then((result) => {
+                if (result.status === 200) {
+                  EventBus.$emit("authenticated", result.data);
+                  // redirect to url from query param but only if it is save for redirection
+                  const redirectTo = getRedirectUrl(this.$router);
+                  redirectTo
+                    ? this.$router.replace(redirectTo)
+                    : this.$router.replace({ name: "Dashboard" });
+                }
+              })
+              .catch((err) => {
+                if (err.response.status === 401) {
+                  this.$bvModal.show("modal-informational");
+                  this.loginError = this.$t("message.login_unauthorized");
+                } else if (err.response.status === 403) {
+                  this.$bvModal.show("modal-informational");
+                  this.loginError = this.$t("message.login_forbidden");
+                }
+              })
+              .finally(() => {
+                this.oidcUserManager.removeUser();
+              });
+          });
+        })
+        .catch((err) => {
+          // automatic fallback to login form when oidc availability check failed
+          this.showLoginForm = true;
+          this.$toastr.e(this.$t("message.oidc_availability_check_failed"));
         });
-      })
-      .catch((err) => {
-        // automatic fallback to login form when oidc availability check failed
-        this.showLoginForm = true;
-        this.$toastr.e(this.$t('message.oidc_availability_check_failed'));
-      });
+    }
   },
 };
 </script>

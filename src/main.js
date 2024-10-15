@@ -17,6 +17,7 @@ import '@/directives/VuePermission';
 import VueToastr from 'vue-toastr';
 import api from './shared/api.json';
 import oidc from './shared/oidc.json';
+import jwt from './shared/jwt.json';
 import version from './version';
 import { getContextPath } from './shared/utils';
 
@@ -34,6 +35,7 @@ Vue.use(VuePageTitle, { prefix: 'Dependency-Track -', router });
 
 Vue.prototype.$api = api;
 Vue.prototype.$oidc = oidc;
+Vue.prototype.$jwt = jwt;
 const contextPath = getContextPath();
 axios
   .get(contextPath + '/static/config.json')
